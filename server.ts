@@ -5,7 +5,6 @@
 
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 
 const app = express();
@@ -19,9 +18,9 @@ let googleGenAI: GoogleGenAI | null = null;
 
 function getGoogleGenAI(): GoogleGenAI {
   if (!googleGenAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required. Please set it in the Settings > Secrets panel on Google AI Studio.');
+      throw new Error('GEMINI_API_KEY or GOOGLE_API_KEY is required. Please add this variable to your environment configuration (e.g. Vercel dashboard).');
     }
     googleGenAI = new GoogleGenAI({
       apiKey,
@@ -36,12 +35,12 @@ function getGoogleGenAI(): GoogleGenAI {
 }
 
 // REST Endpoints
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // Segment meeting transcript to structured schema
-app.post('/api/analyze', async (req, res) => {
+app.post(['/api/analyze', '/analyze'], async (req, res) => {
   try {
     const { transcript } = req.body;
     if (!transcript || typeof transcript !== 'string' || transcript.trim().length === 0) {
@@ -198,7 +197,7 @@ ${transcript}
 });
 
 // Dynamic Grounded Meeting Q&A Chat endpoint
-app.post('/api/chat', async (req, res) => {
+app.post(['/api/chat', '/chat'], async (req, res) => {
   try {
     const { transcript, analysis, chatHistory, userMessage } = req.body;
     if (!transcript || !userMessage) {
@@ -258,6 +257,7 @@ Please write your concise, factual response in standard Markdown layout:`;
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     // Development Mode
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

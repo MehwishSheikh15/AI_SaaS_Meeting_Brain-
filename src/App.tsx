@@ -125,8 +125,19 @@ export default function App() {
       clearInterval(stageTimer);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Server encountered an issue extracting insights.');
+        let errorMsg = 'Server encountered an issue extracting insights.';
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMsg = errorData.error || errorData.message || errorText || errorMsg;
+          } catch {
+            errorMsg = errorText || errorMsg;
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMsg);
       }
 
       const responseData = await response.json();
@@ -194,7 +205,19 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Could not achieve dialogue resonance.');
+        let errorMsg = 'Could not achieve dialogue resonance.';
+        try {
+          const errorText = await response.text();
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMsg = errorData.error || errorData.message || errorText || errorMsg;
+          } catch {
+            errorMsg = errorText || errorMsg;
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
