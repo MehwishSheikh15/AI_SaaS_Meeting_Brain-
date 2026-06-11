@@ -34,38 +34,65 @@ function getGoogleGenAI(): GoogleGenAI {
   return googleGenAI;
 }
 
-// Helper to call generateContent with automatic retry and exponential backoff
+// Helper to call generateContent with automatic retry, exponential backoff, and fallback models
 async function generateContentWithRetry(
   ai: GoogleGenAI,
   params: { model: string; contents: any; config?: any },
-  retries = 3,
-  initialDelay = 1500
+  retries = 2,
+  initialDelay = 1000
 ): Promise<any> {
-  let delay = initialDelay;
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return await ai.models.generateContent(params);
-    } catch (error: any) {
-      const isRetryable =
-        error.status === 503 ||
-        error.status === 429 ||
-        (error.message &&
-          (error.message.includes('503') ||
-            error.message.includes('429') ||
-            error.message.includes('UNAVAILABLE') ||
-            error.message.includes('RESOURCE_EXHAUSTED') ||
-            error.message.includes('demand') ||
-            error.message.includes('limit')));
+  // Ordered sequence of fallback models for resilience against demand spikes
+  const modelList = [
+    params.model,
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ];
+  // Remove duplicates while preserving prioritized order
+  const uniqueModels = Array.from(new Set(modelList));
+  
+  let lastError: any = null;
 
-      if (isRetryable && attempt < retries) {
-        console.warn(`[Meeting Brain] Gemini call attempt ${attempt} failed with ${error.status || '503/429'}. Retrying in ${delay}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2; // Exponential backoff
-        continue;
+  for (const currentModel of uniqueModels) {
+    let delay = initialDelay;
+    console.log(`[Meeting Brain] Attempting call with model: ${currentModel}`);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const result = await ai.models.generateContent({
+          ...params,
+          model: currentModel,
+        });
+        console.log(`[Meeting Brain] Success with model: ${currentModel} on attempt ${attempt}`);
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        const status = error.status || (error.message && error.message.includes('503') ? 503 : (error.message && error.message.includes('429') ? 429 : 500));
+        
+        const isRetryable =
+          status === 503 ||
+          status === 429 ||
+          (error.message &&
+            (error.message.includes('UNAVAILABLE') ||
+              error.message.includes('RESOURCE_EXHAUSTED') ||
+              error.message.includes('demand') ||
+              error.message.includes('limit')));
+
+        console.warn(
+          `[Meeting Brain] Model ${currentModel} attempt ${attempt} failed with code ${status}. Error details: ${error.message || error}`
+        );
+
+        if (isRetryable && attempt < retries) {
+          console.log(`[Meeting Brain] Retrying ${currentModel} in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
+          continue;
+        }
+        // Break from inner loop to try the next model fallback
+        break;
       }
-      throw error;
     }
   }
+  // All fallback models failed or were exhausted
+  throw lastError;
 }
 
 // REST Endpoints
