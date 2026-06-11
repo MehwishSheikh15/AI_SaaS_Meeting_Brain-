@@ -34,6 +34,40 @@ function getGoogleGenAI(): GoogleGenAI {
   return googleGenAI;
 }
 
+// Helper to call generateContent with automatic retry and exponential backoff
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: { model: string; contents: any; config?: any },
+  retries = 3,
+  initialDelay = 1500
+): Promise<any> {
+  let delay = initialDelay;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (error: any) {
+      const isRetryable =
+        error.status === 503 ||
+        error.status === 429 ||
+        (error.message &&
+          (error.message.includes('503') ||
+            error.message.includes('429') ||
+            error.message.includes('UNAVAILABLE') ||
+            error.message.includes('RESOURCE_EXHAUSTED') ||
+            error.message.includes('demand') ||
+            error.message.includes('limit')));
+
+      if (isRetryable && attempt < retries) {
+        console.warn(`[Meeting Brain] Gemini call attempt ${attempt} failed with ${error.status || '503/429'}. Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
 // REST Endpoints
 app.get(['/api/health', '/health'], (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -63,7 +97,7 @@ Here is the meeting transcript to analyze:
 ${transcript}
 ------------------------------------------`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
@@ -189,8 +223,14 @@ ${transcript}
     res.json({ report: reportData, rawText: outputText });
   } catch (error: any) {
     console.error('Extraction Error:', error);
-    res.status(500).json({
-      error: error.message || 'An error occurred during transcript analytics.',
+    let userFriendlyError = error.message || 'An error occurred during transcript analytics.';
+    if (error.status === 503 || (error.message && error.message.includes('503'))) {
+      userFriendlyError = 'The underlying Gemini model is currently undergoing extremely high demand (503 Service Unavailable). We have automatically retried several times, but it remains heavily loaded. Please wait a few seconds and try again!';
+    } else if (error.status === 429 || (error.message && error.message.includes('429'))) {
+      userFriendlyError = 'The API request rate limit has been exceeded (429 Too Many Requests). Please wait a moment and try again.';
+    }
+    res.status(error.status || 500).json({
+      error: userFriendlyError,
       details: error.toString()
     });
   }
@@ -234,7 +274,7 @@ ${userMessage}
 
 Please write your concise, factual response in standard Markdown layout:`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
@@ -246,8 +286,14 @@ Please write your concise, factual response in standard Markdown layout:`;
     res.json({ answer: response.text || 'Unable to generate response.' });
   } catch (error: any) {
     console.error('Chat Error:', error);
-    res.status(500).json({
-      error: error.message || 'An error occurred during dialogue reasoning.',
+    let userFriendlyError = error.message || 'An error occurred during dialogue reasoning.';
+    if (error.status === 503 || (error.message && error.message.includes('503'))) {
+      userFriendlyError = 'The underlying Gemini model is currently undergoing extremely high demand (503 Service Unavailable). We have automatically retried several times, but it remains heavily loaded. Please wait a few seconds and try again!';
+    } else if (error.status === 429 || (error.message && error.message.includes('429'))) {
+      userFriendlyError = 'The API request rate limit has been exceeded (429 Too Many Requests). Please wait a moment and try again.';
+    }
+    res.status(error.status || 500).json({
+      error: userFriendlyError,
       details: error.toString()
     });
   }
