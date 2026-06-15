@@ -1,5 +1,5 @@
 {
-  "name": "Meeting Brain",
+  "name": "AI SaaS Meeting Brain",
   "description": "Expert AI meeting intelligence assistant that converts transcripts into structured, actionable insights.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

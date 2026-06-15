@@ -147,7 +147,7 @@ export default function AuthPortal({ onAuthSuccess }: AuthPortalProps) {
             <BrainCircuit className="w-6.5 h-6.5" />
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            {isLoginView ? 'Welcome to Meeting Brain' : 'Create Intelligence Account'}
+            {isLoginView ? 'Welcome to AI SaaS Meeting Brain' : 'Create Intelligence Account'}
           </h2>
           <p className="text-slate-400 text-xs font-medium max-w-xs mx-auto">
             {isLoginView 

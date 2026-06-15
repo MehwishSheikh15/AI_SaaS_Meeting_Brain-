@@ -425,7 +425,7 @@ export default function App() {
                 <BrainCircuit className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Meeting Brain</h1>
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">AI SaaS Meeting Brain</h1>
                 <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Expert meeting intelligence & actionable analytics</p>
               </div>
             </div>
@@ -443,7 +443,7 @@ export default function App() {
 
         <footer id="unauth-footer" className="bg-white border-t border-slate-200 py-4 mt-auto text-center text-slate-400 text-xs">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p>© 2026 Meeting Brain AI. Powered by <strong className="text-slate-600 font-semibold">Mehwish Sheikh</strong>. All rights reserved.</p>
+            <p>© 2026 AI SaaS Meeting Brain. Powered by <strong className="text-slate-600 font-semibold">Mehwish Sheikh</strong>. All rights reserved.</p>
             <p className="font-mono text-[10px] text-slate-400">Secure & Factual Analysis Engine</p>
           </div>
         </footer>
@@ -462,7 +462,7 @@ export default function App() {
               <BrainCircuit className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Meeting Brain</h1>
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">AI SaaS Meeting Brain</h1>
               <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Expert meeting intelligence & actionable analytics</p>
             </div>
           </div>
@@ -594,7 +594,7 @@ export default function App() {
                 </p>
               </div>
               <p className="text-slate-500 text-xs leading-relaxed max-w-xs">
-                Meeting Brain is studying speaking density, tracking resolution checkpoints, and compiling actionable execution tasks...
+                AI SaaS Meeting Brain is studying speaking density, tracking resolution checkpoints, and compiling actionable execution tasks...
               </p>
             </div>
           </div>
@@ -620,7 +620,7 @@ export default function App() {
 
               {/* Sample Selector row */}
               <div id="sample-picker-block" className="space-y-3">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">Pick a sample transcript below to quick-test "Meeting Brain"</div>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">Pick a sample transcript below to quick-test "AI SaaS Meeting Brain"</div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   {SAMPLE_TRANSCRIPTS.map((sample) => (
                     <button
@@ -819,7 +819,7 @@ export default function App() {
       {/* Styled Footer */}
       <footer id="app-footer" className="bg-white border-t border-slate-200 py-4 mt-auto text-center text-slate-400 text-xs">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© 2026 Meeting Brain AI. Powered by <strong className="text-slate-600 font-semibold">Mehwish Sheikh</strong>. All rights reserved.</p>
+          <p>© 2026 AI SaaS Meeting Brain. Powered by <strong className="text-slate-600 font-semibold">Mehwish Sheikh</strong>. All rights reserved.</p>
           <p className="font-mono text-[10px] text-slate-400">Secure & Factual Analysis Engine</p>
         </div>
       </footer>

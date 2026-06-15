@@ -22,7 +22,7 @@ if (typeof window !== 'undefined') {
     ) {
       event.preventDefault();
       event.stopPropagation();
-      console.warn('[Meeting Brain] Safely caught and neutralized benign development environment WebSocket connection warning.');
+      console.warn('[AI SaaS Meeting Brain] Safely caught and neutralized benign development environment WebSocket connection warning.');
     }
   };
 

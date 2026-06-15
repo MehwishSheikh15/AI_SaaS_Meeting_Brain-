@@ -129,14 +129,14 @@ async function generateContentWithRetry(
 
   for (const currentModel of uniqueModels) {
     let delay = initialDelay;
-    console.log(`[Meeting Brain] Attempting content generation with model: ${currentModel}`);
+    console.log(`[AI SaaS Meeting Brain] Attempting content generation with model: ${currentModel}`);
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const result = await ai.models.generateContent({
           ...params,
           model: currentModel,
         });
-        console.log(`[Meeting Brain] Successful generation with model: ${currentModel} on attempt ${attempt}`);
+        console.log(`[AI SaaS Meeting Brain] Successful generation with model: ${currentModel} on attempt ${attempt}`);
         return result;
       } catch (error: any) {
         lastError = error;
@@ -155,11 +155,11 @@ async function generateContentWithRetry(
           );
 
         console.warn(
-          `[Meeting Brain] Model ${currentModel} attempt ${attempt} failed with code ${status}. (Limit=0: ${!!isLimitZero}, Retryable: ${isRetryable}). Error: ${error.message || error}`
+          `[AI SaaS Meeting Brain] Model ${currentModel} attempt ${attempt} failed with code ${status}. (Limit=0: ${!!isLimitZero}, Retryable: ${isRetryable}). Error: ${error.message || error}`
         );
 
         if (isRetryable && attempt < retries) {
-          console.log(`[Meeting Brain] Retrying ${currentModel} in ${delay}ms...`);
+          console.log(`[AI SaaS Meeting Brain] Retrying ${currentModel} in ${delay}ms...`);
           await new Promise((resolve) => setTimeout(resolve, delay));
           delay *= 2; // Exponential backoff
           continue;
@@ -206,7 +206,7 @@ ${transcript}
       model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
-        systemInstruction: 'You are "Meeting Brain", an expert corporate meeting intelligence analyst. You specialize in pulling high-value decisions, action-item tasks with owners, and speaker profiles from dialogues. You strictly operate under a zero-inference policy: do not add explanations, interpretations, or inferred conclusions. Only state facts explicitly present inside the transcript; if any field or details are unclear or not mentioned, write "Not mentioned" exactly.',
+        systemInstruction: 'You are "AI SaaS Meeting Brain", an expert corporate meeting intelligence analyst. You specialize in pulling high-value decisions, action-item tasks with owners, and speaker profiles from dialogues. You strictly operate under a zero-inference policy: do not add explanations, interpretations, or inferred conclusions. Only state facts explicitly present inside the transcript; if any field or details are unclear or not mentioned, write "Not mentioned" exactly.',
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -357,7 +357,7 @@ app.post(['/api/chat', '/chat'], async (req, res) => {
       ? chatHistory.map((m: any) => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n')
       : '(No previous dialogue)';
 
-    const prompt = `You are "Meeting Brain", an expert AI meeting intelligence assistant.
+    const prompt = `You are "AI SaaS Meeting Brain", an expert AI meeting intelligence assistant.
 Your goal is to answer the user's question about the meeting.
 
 SOCIETY RULES FOR ACCURACY:
@@ -384,7 +384,7 @@ Please write your concise, factual response in standard Markdown layout:`;
       model: 'gemini-3.5-flash',
       contents: prompt,
       config: {
-        systemInstruction: 'You are Meeting Brain. You answer queries on facts explicitly specified within the transcript context. Do not add explanations, interpretations, or inferred conclusions. Only state facts explicitly present in the transcript. If something is unclear or not explicitly mentioned, write "Not mentioned".',
+        systemInstruction: 'You are AI SaaS Meeting Brain. You answer queries on facts explicitly specified within the transcript context. Do not add explanations, interpretations, or inferred conclusions. Only state facts explicitly present in the transcript. If something is unclear or not explicitly mentioned, write "Not mentioned".',
         temperature: 0.1
       }
     });
@@ -426,7 +426,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Meeting Brain] Service booting on http://0.0.0.0:${PORT}`);
+    console.log(`[AI SaaS Meeting Brain] Service booting on http://0.0.0.0:${PORT}`);
   });
 }
 
