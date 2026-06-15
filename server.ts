@@ -28,10 +28,86 @@ function getGoogleGenAI(): GoogleGenAI {
         headers: {
           'User-Agent': 'aistudio-build',
         },
+        timeout: 30000, // 30 seconds request timeout to prevent hanging on slow responses
       },
     });
   }
   return googleGenAI;
+}
+
+// Safely map various error response statuses into numeric HTTP codes
+function getNumericStatus(error: any): number {
+  if (!error) return 500;
+  
+  // If status is a clean number in standard ranges
+  if (typeof error.status === 'number' && error.status >= 100 && error.status < 600) {
+    return error.status;
+  }
+  
+  // Handle string statuses
+  if (typeof error.status === 'string') {
+    const parsed = parseInt(error.status, 10);
+    if (!isNaN(parsed) && parsed >= 100 && parsed < 600) {
+      return parsed;
+    }
+    const statusMap: Record<string, number> = {
+      'UNAVAILABLE': 503,
+      'RESOURCE_EXHAUSTED': 429,
+      'INVALID_ARGUMENT': 400,
+      'PERMISSION_DENIED': 403,
+      'NOT_FOUND': 404,
+      'INTERNAL': 500,
+      'UNIMPLEMENTED': 501,
+      'UNAUTHENTICATED': 401,
+    };
+    const upper = error.status.toUpperCase();
+    if (statusMap[upper]) {
+      return statusMap[upper];
+    }
+  }
+  
+  // Scan the error message or type for rate / quota or availability indicators
+  if (error.message) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('503') || msg.includes('unavailable') || msg.includes('overloaded') || msg.includes('demand')) {
+      return 503;
+    }
+    if (msg.includes('429') || msg.includes('exhausted') || msg.includes('quota') || msg.includes('rate limit') || msg.includes('limit: 0')) {
+      return 429;
+    }
+  }
+  
+  return 500;
+}
+
+// Safeguarded JSON extraction helper
+function parseJSONFromText(text: string): any {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    // Attempt block regex extraction
+    const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (match && match[1]) {
+      try {
+        return JSON.parse(match[1].trim());
+      } catch {
+        // Fall back to general extraction
+      }
+    }
+    
+    // Fallback: search for first curly brace to last curly brace
+    const startIdx = trimmed.indexOf('{');
+    const endIdx = trimmed.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      try {
+        return JSON.parse(trimmed.slice(startIdx, endIdx + 1));
+      } catch {
+        // Fallback to original throw
+      }
+    }
+    throw err;
+  }
 }
 
 // Helper to call generateContent with automatic retry, exponential backoff, and fallback models
@@ -41,15 +117,10 @@ async function generateContentWithRetry(
   retries = 2,
   initialDelay = 1000
 ): Promise<any> {
-  // Broad sequence of fallback models for ultimate resilience against demand spikes and rate/quota limitations
+  // Modern sequence of fallback models for ultimate resilience against demand spikes and rate/quota limitations
   const modelList = [
     params.model,
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-pro',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-2.0-flash',
+    'gemini-3.1-flash-lite',
   ];
   // Remove duplicates while preserving prioritized order
   const uniqueModels = Array.from(new Set(modelList));
@@ -253,17 +324,18 @@ ${transcript}
     }
 
     // Return the clean, parsed object as JSON directly
-    const reportData = JSON.parse(outputText.trim());
+    const reportData = parseJSONFromText(outputText);
     res.json({ report: reportData, rawText: outputText });
   } catch (error: any) {
     console.error('Extraction Error:', error);
+    const numericStatus = getNumericStatus(error);
     let userFriendlyError = error.message || 'An error occurred during transcript analytics.';
-    if (error.status === 503 || (error.message && error.message.includes('503'))) {
+    if (numericStatus === 503) {
       userFriendlyError = 'The underlying Gemini model is currently undergoing extremely high demand (503 Service Unavailable). We have automatically retried several times, but it remains heavily loaded. Please wait a few seconds and try again!';
-    } else if (error.status === 429 || (error.message && error.message.includes('429'))) {
+    } else if (numericStatus === 429) {
       userFriendlyError = 'The API request rate limit has been exceeded (429 Too Many Requests). Please wait a moment and try again.';
     }
-    res.status(error.status || 500).json({
+    res.status(numericStatus).json({
       error: userFriendlyError,
       details: error.toString()
     });
@@ -320,13 +392,14 @@ Please write your concise, factual response in standard Markdown layout:`;
     res.json({ answer: response.text || 'Unable to generate response.' });
   } catch (error: any) {
     console.error('Chat Error:', error);
+    const numericStatus = getNumericStatus(error);
     let userFriendlyError = error.message || 'An error occurred during dialogue reasoning.';
-    if (error.status === 503 || (error.message && error.message.includes('503'))) {
+    if (numericStatus === 503) {
       userFriendlyError = 'The underlying Gemini model is currently undergoing extremely high demand (503 Service Unavailable). We have automatically retried several times, but it remains heavily loaded. Please wait a few seconds and try again!';
-    } else if (error.status === 429 || (error.message && error.message.includes('429'))) {
+    } else if (numericStatus === 429) {
       userFriendlyError = 'The API request rate limit has been exceeded (429 Too Many Requests). Please wait a moment and try again.';
     }
-    res.status(error.status || 500).json({
+    res.status(numericStatus).json({
       error: userFriendlyError,
       details: error.toString()
     });
