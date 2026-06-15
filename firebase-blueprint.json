@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "Meeting": {
+      "title": "Meeting",
+      "description": "A saved meeting report containing transcript context, analyzed summaries, and chat history.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the meeting report."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner userId."
+        },
+        "title": {
+          "type": "string",
+          "description": "Calculated meeting title."
+        },
+        "rawTranscript": {
+          "type": "string",
+          "description": "The full original raw meeting transcript."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Locale ISO date string when the report was calculated."
+        },
+        "analysis": {
+          "type": "object",
+          "description": "Object schema containing the complete structured meeting summaries."
+        },
+        "chatHistory": {
+          "type": "array",
+          "description": "Grounded chatbot conversation logs."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "rawTranscript",
+        "createdAt",
+        "analysis"
+      ]
+    }
+  },
+  "firestore": {
+    "users/{userId}/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "User specific meeting reports collection."
+    }
+  }
+}

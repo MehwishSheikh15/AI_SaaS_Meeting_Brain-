@@ -41,10 +41,14 @@ async function generateContentWithRetry(
   retries = 2,
   initialDelay = 1000
 ): Promise<any> {
-  // Ordered sequence of fallback models for resilience against demand spikes
+  // Broad sequence of fallback models for ultimate resilience against demand spikes and rate/quota limitations
   const modelList = [
     params.model,
     'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
     'gemini-2.0-flash',
   ];
   // Remove duplicates while preserving prioritized order
@@ -54,30 +58,33 @@ async function generateContentWithRetry(
 
   for (const currentModel of uniqueModels) {
     let delay = initialDelay;
-    console.log(`[Meeting Brain] Attempting call with model: ${currentModel}`);
+    console.log(`[Meeting Brain] Attempting content generation with model: ${currentModel}`);
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const result = await ai.models.generateContent({
           ...params,
           model: currentModel,
         });
-        console.log(`[Meeting Brain] Success with model: ${currentModel} on attempt ${attempt}`);
+        console.log(`[Meeting Brain] Successful generation with model: ${currentModel} on attempt ${attempt}`);
         return result;
       } catch (error: any) {
         lastError = error;
         const status = error.status || (error.message && error.message.includes('503') ? 503 : (error.message && error.message.includes('429') ? 429 : 500));
         
+        const isLimitZero = error.message && (error.message.includes('limit: 0') || error.message.includes('limit 0') || error.message.includes('quota is 0'));
         const isRetryable =
-          status === 503 ||
-          status === 429 ||
-          (error.message &&
-            (error.message.includes('UNAVAILABLE') ||
-              error.message.includes('RESOURCE_EXHAUSTED') ||
-              error.message.includes('demand') ||
-              error.message.includes('limit')));
+          !isLimitZero && (
+            status === 503 ||
+            status === 429 ||
+            (error.message &&
+              (error.message.includes('UNAVAILABLE') ||
+                error.message.includes('RESOURCE_EXHAUSTED') ||
+                error.message.includes('demand') ||
+                error.message.includes('limit')))
+          );
 
         console.warn(
-          `[Meeting Brain] Model ${currentModel} attempt ${attempt} failed with code ${status}. Error details: ${error.message || error}`
+          `[Meeting Brain] Model ${currentModel} attempt ${attempt} failed with code ${status}. (Limit=0: ${!!isLimitZero}, Retryable: ${isRetryable}). Error: ${error.message || error}`
         );
 
         if (isRetryable && attempt < retries) {
@@ -86,7 +93,7 @@ async function generateContentWithRetry(
           delay *= 2; // Exponential backoff
           continue;
         }
-        // Break from inner loop to try the next model fallback
+        // Break from inner loop immediately to try the next fallback model (e.g. if it's not retryable or we've run out of attempts)
         break;
       }
     }

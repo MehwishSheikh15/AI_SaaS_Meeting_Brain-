@@ -62,3 +62,18 @@ export interface SavedMeeting {
   analysis: MeetingAnalysisResult;
   chatHistory: ChatMessage[];
 }
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  password?: string; // stored local password representation
+  createdAt: string;
+  avatarSeed: string; // seed or name to render a specific avatar or icon
+}
+
+export interface UserSession {
+  user: UserAccount;
+  token?: string;
+}
+

@@ -23,18 +23,27 @@ import {
   ChevronDown,
   History,
   X,
-  ArrowRight
+  ArrowRight,
+  User,
+  LogOut,
+  Download,
+  Settings,
+  ShieldCheck,
+  Check,
+  Lock as LockIcon
 } from 'lucide-react';
 
 import { SAMPLE_TRANSCRIPTS } from './data/samples';
-import { MeetingAnalysisResult, ChatMessage, SavedMeeting } from './types';
+import { MeetingAnalysisResult, ChatMessage, SavedMeeting, UserAccount } from './types';
 import DashboardOverview from './components/DashboardOverview';
 import Speakers from './components/Speakers';
 import DecisionsGrid from './components/DecisionsGrid';
 import ActionItemsList from './components/ActionItemsList';
 import MeetingChat from './components/MeetingChat';
+import AuthPortal from './components/AuthPortal';
 
-const STORAGE_KEY = 'meeting-brain-reports-v1';
+const SESSION_STORAGE_KEY = 'meeting-brain-session-v1';
+const USERS_STORAGE_KEY = 'meeting-brain-users-list-v1';
 
 export default function App() {
   const [inputText, setInputText] = useState('');
@@ -42,6 +51,16 @@ export default function App() {
   const [analysisStage, setAnalysisStage] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'speakers' | 'decisions' | 'actionItems'>('overview');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Authentication Context
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+
+  // Profile Settings Forms State
+  const [profileName, setProfileName] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileAvatarSeed, setProfileAvatarSeed] = useState('blue');
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
 
   // Loaded analytics context
   const [activeMeeting, setActiveMeeting] = useState<SavedMeeting | null>(null);
@@ -54,28 +73,66 @@ export default function App() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isSendingChat, setIsSendingChat] = useState(false);
 
-  // Load history from local storage on mount
+  // Resolver for scoped storage key based on active user context
+  const getScopedStorageKey = (userId: string) => {
+    return `meeting-brain-reports-v1_${userId}`;
+  };
+
+  // 1. Initial configuration mount check to parse active user sessions
   useEffect(() => {
-    const rawSaved = localStorage.getItem(STORAGE_KEY);
-    if (rawSaved) {
+    const rawSession = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (rawSession) {
       try {
-        const parsed = JSON.parse(rawSaved) as SavedMeeting[];
-        setHistoryList(parsed);
-        // Pre-load the latest meeting analyzed if history exists
-        if (parsed.length > 0) {
-          setActiveMeeting(parsed[0]);
-          setChatHistory(parsed[0].chatHistory || []);
-        }
+        const user = JSON.parse(rawSession) as UserAccount;
+        setCurrentUser(user);
+        // Pre-fill profile updates forms
+        setProfileName(user.name);
+        setProfileAvatarSeed(user.avatarSeed);
       } catch (err) {
-        console.error('Failed to parse meeting brain local history:', err);
+        console.error('Failed to parse active user session:', err);
       }
     }
   }, []);
 
-  // Sync historical records back to local storage when changed
+  // 2. React to user authorization sessions switching
+  useEffect(() => {
+    if (currentUser) {
+      const userKey = getScopedStorageKey(currentUser.id);
+      const rawSaved = localStorage.getItem(userKey);
+      if (rawSaved) {
+        try {
+          const parsed = JSON.parse(rawSaved) as SavedMeeting[];
+          setHistoryList(parsed);
+          if (parsed.length > 0) {
+            setActiveMeeting(parsed[0]);
+            setChatHistory(parsed[0].chatHistory || []);
+          } else {
+            setActiveMeeting(null);
+            setChatHistory([]);
+          }
+        } catch (err) {
+          console.error('Failed to parse scoped user meeting history:', err);
+          setHistoryList([]);
+          setActiveMeeting(null);
+        }
+      } else {
+        setHistoryList([]);
+        setActiveMeeting(null);
+        setChatHistory([]);
+      }
+    } else {
+      setHistoryList([]);
+      setActiveMeeting(null);
+      setChatHistory([]);
+    }
+  }, [currentUser]);
+
+  // Sync scoped records back to local storage
   const saveToHistory = (newList: SavedMeeting[]) => {
+    if (!currentUser) return;
     setHistoryList(newList);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+    const userKey = getScopedStorageKey(currentUser.id);
+    localStorage.setItem(userKey, JSON.stringify(newList));
   };
 
   // Preset sample transcript selector click handler
@@ -279,14 +336,129 @@ export default function App() {
     setErrorMessage(null);
   };
 
+  // Profile parameter adjustments submission
+  const handleUpdateProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setProfileSuccessMsg(null);
+
+    const updatedName = profileName.trim();
+    if (!updatedName) {
+      setErrorMessage('Profile name cannot be empty.');
+      return;
+    }
+
+    // Retrieve and update registered users table
+    const rawUsersList = localStorage.getItem(USERS_STORAGE_KEY);
+    let usersList: UserAccount[] = [];
+    try {
+      usersList = rawUsersList ? JSON.parse(rawUsersList) : [];
+    } catch {
+      usersList = [];
+    }
+
+    const updatedUsers = usersList.map(u => {
+      if (u.id === currentUser.id) {
+        const updated: UserAccount = {
+          ...u,
+          name: updatedName,
+          avatarSeed: profileAvatarSeed,
+        };
+        if (profilePassword.trim()) {
+          updated.password = profilePassword.trim();
+        }
+        return updated;
+      }
+      return u;
+    });
+
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updatedUsers));
+
+    // Update active currentUser session
+    const matchedUpdatedUser = updatedUsers.find(u => u.id === currentUser.id);
+    if (matchedUpdatedUser) {
+      setCurrentUser(matchedUpdatedUser);
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(matchedUpdatedUser));
+      setProfileSuccessMsg('Profile settings updated successfully!');
+      setProfilePassword('');
+      setTimeout(() => {
+        setProfileSuccessMsg(null);
+      }, 3050);
+    }
+  };
+
+  // Sign User out of current active session
+  const handleSignOut = () => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setCurrentUser(null);
+    setShowProfileDrawer(false);
+    setProfilePassword('');
+    setProfileSuccessMsg(null);
+  };
+
+  // Export processed database archive as local JSON
+  const handleExportData = () => {
+    if (!currentUser) return;
+    try {
+      const dataStr = JSON.stringify(historyList, null, 2);
+      const url = URL.createObjectURL(new Blob([dataStr], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `meeting_brain_archive_${currentUser.email.split('@')[0]}_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Failed to export localized meeting records:', err);
+    }
+  };
+
+  // Render gate when authentication is required
+  if (!currentUser) {
+    return (
+      <div id="app-container" className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-all">
+        {/* Primary Brand Navbar Header for unauthorized view */}
+        <header id="unauth-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-2xs">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">Meeting Brain</h1>
+                <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Expert meeting intelligence & actionable analytics</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col justify-center items-center">
+          <AuthPortal onAuthSuccess={(user) => {
+            setCurrentUser(user);
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+            setProfileName(user.name);
+            setProfileAvatarSeed(user.avatarSeed);
+          }} />
+        </main>
+
+        <footer id="unauth-footer" className="bg-white border-t border-slate-200 py-4 mt-auto text-center text-slate-400 text-xs">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>© 2026 Meeting Brain AI. Powered by <strong className="text-slate-600 font-semibold">Mehwish Sheikh</strong>. All rights reserved.</p>
+            <p className="font-mono text-[10px] text-slate-400">Secure & Factual Analysis Engine</p>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div id="app-container" className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans transition-all">
       
       {/* Primary Brand Navbar Header */}
       <header id="primary-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-2xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
+          <div className="flex items-center space-x-3 text-left">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
               <BrainCircuit className="w-5 h-5" />
             </div>
             <div>
@@ -300,7 +472,7 @@ export default function App() {
             {activeMeeting && (
               <button
                 onClick={handleCreateNewAnalysis}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-105/50 border border-blue-100 text-blue-700 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-700 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
                 <span className="hidden sm:inline">New Analysis</span>
@@ -318,6 +490,34 @@ export default function App() {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-blue-600 rounded-full border border-white animate-pulse"></span>
               )}
             </button>
+
+            {/* User Account Settings Widget Badge */}
+            <div className="flex items-center border-l border-slate-200 pl-3">
+              <button
+                onClick={() => {
+                  setProfileName(currentUser.name);
+                  setProfileAvatarSeed(currentUser.avatarSeed);
+                  setShowProfileDrawer(true);
+                }}
+                className="flex items-center space-x-2 p-1 hover:bg-slate-50 border border-transparent hover:border-slate-150 rounded-lg transition-all cursor-pointer text-left"
+                title="Account Settings"
+              >
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shadow-3xs shrink-0 border uppercase ${
+                  currentUser.avatarSeed === 'blue' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                  currentUser.avatarSeed === 'emerald' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                  currentUser.avatarSeed === 'purple' ? 'bg-purple-100 text-purple-700 border-purple-200' :
+                  currentUser.avatarSeed === 'rose' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-amber-100 text-amber-700 border-amber-200'
+                }`}>
+                  {currentUser.name ? currentUser.name.charAt(0) : 'U'}
+                </span>
+                <div className="hidden md:block">
+                  <p className="text-xs font-bold text-slate-800 leading-none">{currentUser.name}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5 max-w-[100px] truncate">{currentUser.email}</p>
+                </div>
+                <Settings className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+              </button>
+            </div>
+
           </div>
         </div>
       </header>
@@ -623,6 +823,149 @@ export default function App() {
           <p className="font-mono text-[10px] text-slate-400">Secure & Factual Analysis Engine</p>
         </div>
       </footer>
+
+      {/* Account Settings Modal Overlay Backdrop */}
+      {showProfileDrawer && (
+        <div id="settings-modal" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full shadow-xl overflow-hidden animate-fade-in-up">
+            
+            {/* Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Settings className="w-5 h-5 text-slate-500" />
+                <h3 className="font-bold text-slate-800 text-sm sm:text-base">Workspace & Profile Settings</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProfileDrawer(false);
+                  setProfileSuccessMsg(null);
+                  setProfilePassword('');
+                }}
+                className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-md transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form & Actions */}
+            <form onSubmit={handleUpdateProfileSubmit} className="p-6 space-y-5 text-left">
+              
+              {/* Profile alerts */}
+              {profileSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs rounded-lg flex items-center space-x-2 animate-bounce">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-semibold leading-none">{profileSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Display Name Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Occupant Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Your Full Name"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-hidden rounded-lg text-xs font-sans transition-all"
+                />
+              </div>
+
+              {/* Password Input (Optional) */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Update Security Code</label>
+                  <span className="text-[9.5px] text-slate-450 select-none">Leave blank to keep current</span>
+                </div>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                    <LockIcon className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="password"
+                    value={profilePassword}
+                    onChange={(e) => setProfilePassword(e.target.value)}
+                    placeholder="Set a new safety password, e.g. min 5 chars"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-100 outline-hidden rounded-lg text-xs font-sans transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Avatar Seed Accent selections */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Configure Avatar Tone</label>
+                <div className="flex flex-wrap gap-2.5">
+                  {['blue', 'emerald', 'purple', 'rose', 'amber'].map((seedColor) => (
+                    <button
+                      key={seedColor}
+                      type="button"
+                      onClick={() => setProfileAvatarSeed(seedColor)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center space-x-1 cursor-pointer ${
+                        profileAvatarSeed === seedColor
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-3xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${
+                        seedColor === 'blue' ? 'bg-blue-500' :
+                        seedColor === 'emerald' ? 'bg-emerald-500' :
+                        seedColor === 'purple' ? 'bg-purple-500' :
+                        seedColor === 'rose' ? 'bg-rose-500' : 'bg-amber-500'
+                      }`} />
+                      <span>{seedColor.toUpperCase()}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Database workspace details stat */}
+              <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg text-[11px] text-slate-500 space-y-1">
+                <div className="flex justify-between items-center gap-1.5">
+                  <span>Registered account:</span>
+                  <span className="font-mono text-slate-705 font-semibold truncate max-w-[200px]">{currentUser.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Meeting briefs stored:</span>
+                  <span className="font-bold text-blue-650">{historyList.length} records</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Scope isolation key:</span>
+                  <span className="text-[9.5px] font-mono text-slate-400 truncate max-w-[150px]">{currentUser.id}</span>
+                </div>
+              </div>
+
+              {/* Double actions layer in form layout */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-slate-100">
+                <button
+                  type="submit"
+                  className="flex-1 py-2 px-3 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer text-center"
+                >
+                  Save Profile Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportData}
+                  className="py-2 px-3 bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 transition-colors cursor-pointer inline-flex items-center justify-center space-x-1"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Download Archive</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="w-full py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-750 font-semibold border border-rose-200/50 text-xs rounded-lg transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span>Disconnect Active Session</span>
+              </button>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
