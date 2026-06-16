@@ -9,9 +9,10 @@ import { ActionItem } from '../types';
 
 interface ActionItemsListProps {
   actionItems: ActionItem[];
+  onToggleTask?: (task: string) => void;
 }
 
-export default function ActionItemsList({ actionItems }: ActionItemsListProps) {
+export default function ActionItemsList({ actionItems, onToggleTask }: ActionItemsListProps) {
   // Simple check/uncheck state mapped by task name to make it interactive!
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,7 +36,17 @@ export default function ActionItemsList({ actionItems }: ActionItemsListProps) {
     new Set(actionItems.map(item => item.owner || 'Unassigned'))
   ).filter(owner => owner.trim().length > 0);
 
+  const isTaskCompleted = (item: ActionItem) => {
+    if (item.completed !== undefined) {
+      return item.completed;
+    }
+    return !!completedTasks[item.task];
+  };
+
   const toggleTaskCompletion = (task: string) => {
+    if (onToggleTask) {
+      onToggleTask(task);
+    }
     setCompletedTasks(prev => ({
       ...prev,
       [task]: !prev[task],
@@ -69,7 +80,7 @@ export default function ActionItemsList({ actionItems }: ActionItemsListProps) {
     return matchesSearch && matchesPriority && matchesOwner;
   });
 
-  const completedCount = Object.values(completedTasks).filter(Boolean).length;
+  const completedCount = actionItems.filter(isTaskCompleted).length;
   const progressPercent = actionItems.length > 0
     ? Math.round((completedCount / actionItems.length) * 100)
     : 0;
@@ -155,7 +166,7 @@ export default function ActionItemsList({ actionItems }: ActionItemsListProps) {
           </div>
         ) : (
           filteredItems.map((item, idx) => {
-            const isCompleted = !!completedTasks[item.task];
+            const isCompleted = isTaskCompleted(item);
             return (
               <div
                 key={idx}

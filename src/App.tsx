@@ -336,6 +336,36 @@ export default function App() {
     setErrorMessage(null);
   };
 
+  // Toggle task completion state and persist it inside the active meeting report
+  const handleToggleTaskCompletion = (taskName: string) => {
+    if (!activeMeeting) return;
+
+    const updatedActionItems = activeMeeting.analysis.actionItems.map(item => {
+      if (item.task === taskName) {
+        return { ...item, completed: !item.completed };
+      }
+      return item;
+    });
+
+    const updatedActiveMeeting = {
+      ...activeMeeting,
+      analysis: {
+        ...activeMeeting.analysis,
+        actionItems: updatedActionItems
+      }
+    };
+
+    setActiveMeeting(updatedActiveMeeting);
+
+    const updatedMeetings = historyList.map(m => {
+      if (m.id === activeMeeting.id) {
+        return updatedActiveMeeting;
+      }
+      return m;
+    });
+    saveToHistory(updatedMeetings);
+  };
+
   // Profile parameter adjustments submission
   const handleUpdateProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -790,7 +820,10 @@ export default function App() {
                     )}
 
                     {activeTab === 'actionItems' && (
-                      <ActionItemsList actionItems={activeMeeting.analysis.actionItems} />
+                      <ActionItemsList
+                        actionItems={activeMeeting.analysis.actionItems}
+                        onToggleTask={handleToggleTaskCompletion}
+                      />
                     )}
                   </div>
                 </div>

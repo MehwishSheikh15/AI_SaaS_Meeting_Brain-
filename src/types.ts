@@ -27,6 +27,7 @@ export interface ActionItem {
   owner: string;
   priority: 'High' | 'Medium' | 'Low';
   deadlineMentioned: string;
+  completed?: boolean;
 }
 
 export interface KeyQuoteItem {
